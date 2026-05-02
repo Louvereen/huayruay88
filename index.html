@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Number Tool Pro+</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+
+<style>
+body {
+  font-family: -apple-system, sans-serif;
+  background: #f7f7f7;
+  padding: 15px;
+}
+
+.card {
+  background: white;
+  padding: 15px;
+  border-radius: 16px;
+  margin-bottom: 15px;
+}
+
+input, button {
+  width: 100%;
+  padding: 14px;
+  margin: 5px 0;
+  font-size: 16px;
+  border-radius: 10px;
+}
+
+button { border: none; }
+.primary { background: #007aff; color: white; }
+.secondary { background: #eee; }
+.danger { background: #ff3b30; color: white; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 5px;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cell {
+  background: white;
+  padding: 5px;
+  border-radius: 8px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.top { background: #ff3b30; color: white; }
+.high { background: #ff9500; color: white; }
+
+.hidden { display:none; }
+.file { color: blue; cursor:pointer; }
+
+</style>
+</head>
+<body>
+
+<div id="home" class="card">
+  <h2>📁 เลือกไฟล์</h2>
+  <input id="newName" placeholder="ตั้งชื่อไฟล์">
+  <button class="primary" onclick="createFile()">สร้างใหม่</button>
+  <div id="fileList"></div>
+</div>
+
+<div id="app" class="hidden">
+
+<div class="card">
+  <h2 id="fileTitle"></h2>
+  <input id="num" placeholder="เลข 3 หลัก">
+  <input id="qty" type="number" placeholder="จำนวน">
+  <button class="primary" onclick="addData()">เพิ่ม</button>
+
+  <input id="search" placeholder="🔎 ค้นหาเลข" oninput="calculate()">
+
+  <button class="secondary" onclick="calculate()">สรุป</button>
+  <button class="secondary" onclick="exportPDF()">📄 Export PDF</button>
+</div>
+
+<div class="card">
+  <div id="grid" class="grid"></div>
+  <h3 id="total"></h3>
+</div>
+
+<div class="card">
+  <button class="danger" onclick="resetConfirm()">Reset</button>
+</div>
+
+</div>
+
+<script>
+let data={}, currentFile="";
+
+function loadFiles(){
+  let list=document.getElementById("fileList");
+  list.innerHTML="";
+  Object.keys(localStorage).forEach(f=>{
+    let d=document.createElement("div");
+    d.className="file";
+    d.innerText=f;
+    d.onclick=()=>openFile(f);
+    list.appendChild(d);
+  });
+}
+
+function createFile(){
+  let n=document.getElementById("newName").value.trim();
+  if(!n) return alert("ตั้งชื่อก่อน");
+  localStorage.setItem(n,"{}");
+  openFile(n);
+}
+
+function openFile(n){
+  currentFile=n;
+  data=JSON.parse(localStorage.getItem(n))||{};
+  document.getElementById("home").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  document.getElementById("fileTitle").innerText=n;
+}
+
+function save(){
+  localStorage.setItem(currentFile,JSON.stringify(data));
+}
+
+function addData(){
+  let num=numEl.value.trim();
+  let qty=parseFloat(qtyEl.value);
+  if(!/^\d{3}$/.test(num)||isNaN(qty)) return;
+
+  data[num]=(data[num]||0)+qty;
+  numEl.value=""; qtyEl.value="";
+  save();
+  calculate();
+}
+
+const numEl=document.getElementById("num");
+const qtyEl=document.getElementById("qty");
+
+qtyEl.addEventListener("keypress",e=>{
+  if(e.key==="Enter") addData();
+});
+
+function calculate(){
+  let search=document.getElementById("search").value.trim();
+  let grid=document.getElementById("grid");
+  grid.innerHTML="";
+
+  let groups={};
+  for(let i=0;i<10;i++) groups[i]=[];
+
+  let values=Object.values(data);
+  let max=Math.max(...values,0);
+  let sorted=[...values].sort((a,b)=>b-a);
+  let threshold=sorted[Math.floor(sorted.length*0.2)]||0;
+
+  let total=0;
+
+  Object.keys(data).sort().forEach(num=>{
+    if(search && !num.includes(search)) return;
+
+    let val=data[num];
+    total+=val;
+    groups[num[0]].push({num,val});
+  });
+
+  for(let i=0;i<10;i++){
+    let col=document.createElement("div");
+    col.className="col";
+
+    groups[i].sort((a,b)=>a.num.localeCompare(b.num));
+
+    groups[i].forEach(item=>{
+      let cls="cell";
+      if(item.val===max) cls+=" top";
+      else if(item.val>=threshold) cls+=" high";
+
+      let d=document.createElement("div");
+      d.className=cls;
+      d.innerHTML=`${item.num}<br>${item.val}`;
+      col.appendChild(d);
+    });
+
+    grid.appendChild(col);
+  }
+
+  document.getElementById("total").innerText="รวม: "+total;
+}
+
+function exportPDF(){
+  let el=document.getElementById("grid");
+  html2pdf().from(el).save(currentFile+".pdf");
+  setTimeout(()=>window.print(),500);
+}
+
+function resetConfirm(){
+  if(confirm("ลบทั้งหมด?") && confirm("ยืนยันอีกครั้ง?")){
+    data={};
+    save();
+    calculate();
+  }
+}
+
+loadFiles();
+</script>
+
+</body>
+</html>
